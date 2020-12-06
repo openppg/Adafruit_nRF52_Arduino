@@ -44,6 +44,10 @@
 #define CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_ALIGN          __attribute__ ((aligned(4)))
 
+#ifndef CFG_TUSB_DEBUG
+#define CFG_TUSB_DEBUG              0
+#endif
+
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
@@ -72,8 +76,12 @@
 #define CFG_TUD_MIDI_TX_BUFSIZE     128
 
 // Vendor FIFO size of TX and RX
+#ifndef CFG_TUD_VENDOR_RX_BUFSIZE
 #define CFG_TUD_VENDOR_RX_BUFSIZE   64
+#endif
+#ifndef CFG_TUD_VENDOR_TX_BUFSIZE
 #define CFG_TUD_VENDOR_TX_BUFSIZE   64
+#endif
 
 #ifdef __cplusplus
  }
