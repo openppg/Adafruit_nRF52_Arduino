@@ -41,8 +41,10 @@
 #define CFG_BLE_TX_POWER_LEVEL    0
 #endif
 
-#ifndef CFG_DEFAULT_NAME
-#define CFG_DEFAULT_NAME          "Bluefruit52"
+#ifdef USB_PRODUCT
+  #define CFG_DEFAULT_NAME    USB_PRODUCT
+#else
+  #define CFG_DEFAULT_NAME    "Feather nRF52832"
 #endif
 
 #ifndef CFG_BLE_TASK_STACKSIZE
@@ -76,6 +78,17 @@ void usb_softdevice_post_enable(void)
   sd_power_usbdetected_enable(true);
   sd_power_usbpwrrdy_enable(true);
   sd_power_usbremoved_enable(true);
+
+  uint32_t usb_reg;
+  sd_power_usbregstatus_get(&usb_reg);
+
+  // Note: Detect event is possibly handled by usb_hardware_init() however depending on how fast
+  // Bluefruit.begin() is called, Ready event may or may not be handled before we disable the nrfx_power.
+  //    USBPULLUP not enabled -> Ready event not yet handled
+  if ( (usb_reg & POWER_USBREGSTATUS_OUTPUTRDY_Msk) && (NRF_USBD->USBPULLUP == 0) )
+  {
+    tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_READY);
+  }
 }
 
 #endif
@@ -163,7 +176,7 @@ AdafruitBluefruit::AdafruitBluefruit(void)
   _ble_event_sem = NULL;
   _soc_event_sem = NULL;
 #ifdef ANT_LICENSE_KEY
-  _mprot_event_sem = NULL; //additiona semaphore for multiprotocol 
+  _mprot_event_sem = NULL;
 #endif
 
   _led_blink_th  = NULL;
@@ -175,20 +188,6 @@ AdafruitBluefruit::AdafruitBluefruit(void)
 
   _event_cb = NULL;
   _rssi_cb = NULL;
-
-  _sec_param = ((ble_gap_sec_params_t)
-                {
-                  .bond         = 1,
-                  .mitm         = 0,
-                  .lesc         = 0,
-                  .keypress     = 0,
-                  .io_caps      = BLE_GAP_IO_CAPS_NONE,
-                  .oob          = 0,
-                  .min_key_size = 7,
-                  .max_key_size = 16,
-                  .kdist_own    = { .enc = 1, .id = 1},
-                  .kdist_peer   = { .enc = 1, .id = 1},
-                });
 }
 
 void AdafruitBluefruit::configServiceChanged(bool changed)
@@ -294,34 +293,31 @@ bool AdafruitBluefruit::begin(uint8_t prph_count, uint8_t central_count)
 #if defined( USE_LFXO )
   nrf_clock_lf_cfg_t clock_cfg =
   {
-      // LFXO
-      .source        = NRF_CLOCK_LF_SRC_XTAL,
-      .rc_ctiv       = 0,
-      .rc_temp_ctiv  = 0,
-      .accuracy      = NRF_CLOCK_LF_ACCURACY_20_PPM
+    // LFXO
+    .source        = NRF_CLOCK_LF_SRC_XTAL,
+    .rc_ctiv       = 0,
+    .rc_temp_ctiv  = 0,
+    .accuracy      = NRF_CLOCK_LF_ACCURACY_20_PPM
   };
 #elif defined( USE_LFRC )
   nrf_clock_lf_cfg_t clock_cfg = 
   {
-      // LXRC
-      .source        = NRF_CLOCK_LF_SRC_RC,
-      .rc_ctiv       = 16,
-      .rc_temp_ctiv  = 2,
-      .accuracy      = NRF_CLOCK_LF_ACCURACY_250_PPM
+    // LXRC
+    .source        = NRF_CLOCK_LF_SRC_RC,
+    .rc_ctiv       = 16,
+    .rc_temp_ctiv  = 2,
+    .accuracy      = NRF_CLOCK_LF_ACCURACY_250_PPM
   };
 #else
   #error Clock Source is not configured, define USE_LFXO or USE_LFRC according to your board in variant.h
 #endif
 
-  /*------------------------------------------------------------------
-  ** BLE only Softdevices have 2-args sd_softdevice_enable()
-  ** BLE & ANT+ Softdevices have 3-args sd_softdevice_enable()
-  */
-  #ifdef ANT_LICENSE_KEY
+  // Enable SoftDevice
+#ifdef ANT_LICENSE_KEY
   VERIFY_STATUS( sd_softdevice_enable(&clock_cfg, nrf_error_cb, ANT_LICENSE_KEY), false );
-#else //#ifdef ANT_LICENSE_KEY
+#else
   VERIFY_STATUS( sd_softdevice_enable(&clock_cfg, nrf_error_cb), false );
-#endif //#ifdef ANT_LICENSE_KEY
+#endif
 
 #ifdef USE_TINYUSB
   usb_softdevice_post_enable();
@@ -460,16 +456,11 @@ bool AdafruitBluefruit::begin(uint8_t prph_count, uint8_t central_count)
   // Init Peripheral role
   VERIFY( Periph.begin() );
 
+  Security.begin();
+
   // Default device name
   ble_gap_conn_sec_mode_t sec_mode = BLE_SECMODE_OPEN;
   VERIFY_STATUS(sd_ble_gap_device_name_set(&sec_mode, (uint8_t const *) CFG_DEFAULT_NAME, strlen(CFG_DEFAULT_NAME)), false);
-
-  //------------- USB -------------//
-#ifdef USE_TINYUSB
-  sd_power_usbdetected_enable(true);
-  sd_power_usbpwrrdy_enable(true);
-  sd_power_usbremoved_enable(true);
-#endif
 
   // Init Central role
   if (_central_count)  Central.begin();
@@ -629,7 +620,7 @@ bool AdafruitBluefruit::disconnect(uint16_t conn_hdl)
   return true; // not connected still return true
 }
 
-void AdafruitBluefruit::setEventCallback ( void (*fp) (ble_evt_t*) )
+void AdafruitBluefruit::setEventCallback (event_cb_t fp)
 {
   _event_cb = fp;
 }
@@ -637,12 +628,6 @@ void AdafruitBluefruit::setEventCallback ( void (*fp) (ble_evt_t*) )
 uint16_t AdafruitBluefruit::connHandle(void)
 {
   return _conn_hdl;
-}
-
-bool AdafruitBluefruit::connPaired(uint16_t conn_hdl)
-{
-  BLEConnection* conn = Bluefruit.Connection(conn_hdl);
-  return conn && conn->paired();
 }
 
 uint16_t AdafruitBluefruit::getMaxMtu(uint8_t role)
@@ -655,41 +640,31 @@ BLEConnection* AdafruitBluefruit::Connection(uint16_t conn_hdl)
   return (conn_hdl < BLE_MAX_CONNECTION) ? _connection[conn_hdl] : NULL;
 }
 
-void AdafruitBluefruit::setRssiCallback(rssi_callback_t fp)
+void AdafruitBluefruit::setRssiCallback(rssi_cb_t fp)
 {
   _rssi_cb = fp;
 }
 
 
-COMMENT_OUT (
-bool AdafruitBluefruit::setPIN(const char* pin)
-{
-  VERIFY ( strlen(pin) == BLE_GAP_PASSKEY_LEN );
-
-  _auth_type = BLE_GAP_AUTH_KEY_TYPE_PASSKEY;
-  memcpy(_pin, pin, BLE_GAP_PASSKEY_LEN);
-
-// Config Static Passkey
-//  ble_opt_t opt
-//	uint8_t passkey[] = STATIC_PASSKEY;
-//	m_static_pin_option.gap.passkey.p_passkey = passkey;
-//err_code = sd_ble_opt_set(BLE_GAP_OPT_PASSKEY, &m_static_pin_option);
-
-  return true;
-}
-)
-
 /*------------------------------------------------------------------*/
 /* Thread & SoftDevice Event handler
  *------------------------------------------------------------------*/
-void SD_EVT_IRQHandler(void)
+extern "C" void SD_EVT_IRQHandler(void)
 {
-  // Notify both BLE & SOC Task
+#if CFG_SYSVIEW
+  SEGGER_SYSVIEW_RecordEnterISR();
+#endif
+
+  // Notify both BLE & SOC & MultiProtocol (if any) Task
   xSemaphoreGiveFromISR(Bluefruit._soc_event_sem, NULL);
   xSemaphoreGiveFromISR(Bluefruit._ble_event_sem, NULL);
+
 #ifdef ANT_LICENSE_KEY
-  // Notify parallel multiprotocol Task, if any
   if (Bluefruit._mprot_event_sem)  xSemaphoreGiveFromISR(Bluefruit._mprot_event_sem, NULL);
+#endif
+
+#if CFG_SYSVIEW
+  SEGGER_SYSVIEW_RecordExitISR();
 #endif
 }
 
@@ -794,7 +769,11 @@ void AdafruitBluefruit::_ble_handler(ble_evt_t* evt)
   LOG_LV2("BLE", "%s : Conn Handle = %d", dbg_ble_event_str(evt->header.evt_id), conn_hdl);
 
   // GAP handler
-  if ( conn ) conn->_eventHandler(evt);
+  if ( conn )
+  {
+    conn->_eventHandler(evt);
+    Security._eventHandler(evt);
+  }
 
   switch(evt->header.evt_id)
   {
@@ -957,22 +936,6 @@ void AdafruitBluefruit::_setConnLed (bool on_off)
   }
 }
 
-/*------------------------------------------------------------------*/
-/* Bonds
- *------------------------------------------------------------------*/
-bool AdafruitBluefruit::requestPairing(uint16_t conn_hdl)
-{
-  BLEConnection* conn = this->Connection(conn_hdl);
-  VERIFY(conn);
-
-  return conn->requestPairing();
-}
-
-void AdafruitBluefruit::clearBonds(void)
-{
-  bond_clear_prph();
-}
-
 //--------------------------------------------------------------------+
 //
 //--------------------------------------------------------------------+
@@ -984,7 +947,7 @@ void Bluefruit_printInfo(void)
 
 void AdafruitBluefruit::printInfo(void)
 {
-  // Skip if Serial is not initialised
+  // Skip if Serial is not initialized
   if ( !Serial ) return;
   // prepare for ability to change output, based on compile-time flags
   Print& logger = Serial;
