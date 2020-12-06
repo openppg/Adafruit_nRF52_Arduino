@@ -116,6 +116,60 @@ feather52840.menu.debug.l3=Level 3 (Segger SystemView)
 feather52840.menu.debug.l3.build.debug_flags=-DCFG_DEBUG=3
 feather52840.menu.debug.l3.build.sysview_flags=-DCFG_SYSVIEW=1
 
+# ----------------------------------
+# OpenPPG Controller nRF52840
+# ----------------------------------
+openppgcnrf52840.name=Openppg nRF52840
+
+# VID/PID for bootloader with/without UF2, Arduino + Circuitpython App
+openppgcnrf52840.vid.0=0x239A
+openppgcnrf52840.pid.0=0x8029
+openppgcnrf52840.vid.1=0x239A
+openppgcnrf52840.pid.1=0x0029
+openppgcnrf52840.vid.2=0x239A
+openppgcnrf52840.pid.2=0x002A
+openppgcnrf52840.vid.3=0x239A
+openppgcnrf52840.pid.3=0x802A
+
+# Upload
+openppgcnrf52840.bootloader.tool=bootburn
+openppgcnrf52840.upload.tool=nrfutil
+openppgcnrf52840.upload.protocol=nrfutil
+openppgcnrf52840.upload.use_1200bps_touch=true
+openppgcnrf52840.upload.wait_for_upload_port=true
+openppgcnrf52840.upload.maximum_size=815104
+openppgcnrf52840.upload.maximum_data_size=237568
+
+# Build
+openppgcnrf52840.build.mcu=cortex-m4
+openppgcnrf52840.build.f_cpu=64000000
+openppgcnrf52840.build.board=NRF52840_FEATHER
+openppgcnrf52840.build.core=nRF5
+openppgcnrf52840.build.variant=feather_nrf52840_express
+openppgcnrf52840.build.usb_manufacturer="Adafruit LLC"
+openppgcnrf52840.build.usb_product="Feather nRF52840 Express"
+openppgcnrf52840.build.extra_flags=-DNRF52840_XXAA {build.flags.usb}
+openppgcnrf52840.build.ldscript=nrf52840_s140_v6.ld
+openppgcnrf52840.build.vid=0x239A
+openppgcnrf52840.build.pid=0x8029
+
+# SofDevice Menu
+openppgcnrf52840.menu.softdevice.s140v6=0.3.2 SoftDevice s140 6.1.1
+openppgcnrf52840.menu.softdevice.s140v6.build.sd_name=s140
+openppgcnrf52840.menu.softdevice.s140v6.build.sd_version=6.1.1
+openppgcnrf52840.menu.softdevice.s140v6.build.sd_fwid=0x00B6
+
+# Debug Menu
+openppgcnrf52840.menu.debug.l0=Level 0 (Release)
+openppgcnrf52840.menu.debug.l0.build.debug_flags=-DCFG_DEBUG=0
+openppgcnrf52840.menu.debug.l1=Level 1 (Error Message)
+openppgcnrf52840.menu.debug.l1.build.debug_flags=-DCFG_DEBUG=1
+openppgcnrf52840.menu.debug.l2=Level 2 (Full Debug)
+openppgcnrf52840.menu.debug.l2.build.debug_flags=-DCFG_DEBUG=2
+openppgcnrf52840.menu.debug.l3=Level 3 (Segger SystemView)
+openppgcnrf52840.menu.debug.l3.build.debug_flags=-DCFG_DEBUG=3
+openppgcnrf52840.menu.debug.l3.build.sysview_flags=-DCFG_SYSVIEW=1
+
 
 # ----------------------------------
 # Feather nRF52840 sense
